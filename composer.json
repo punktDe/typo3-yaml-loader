@@ -1,0 +1,26 @@
+{
+    "name": "punktde/typo3-yaml-loader",
+    "type": "typo3-cms-extension",
+    "description": "Load content types and doktypes from yaml",
+    "homepage": "https://www.punkt.de",
+    "version": "1.0.0",
+    "require": {
+        "typo3/cms-core": "^12.4"
+    },
+    "authors": [
+        {
+            "name": "Jan-Michael Löw",
+            "email": "loew@punkt.de"
+        }
+    ],
+    "extra": {
+        "typo3/cms": {
+            "extension-key": "typo3_yaml_loader"
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "PunktDe\\Typo3YamlLoader\\": "Classes"
+        }
+    }
+}

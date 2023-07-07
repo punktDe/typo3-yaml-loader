@@ -1,0 +1,16 @@
+example:
+  iconIdentifier: EXT:typo3_yaml_loader/Resources/Public/Icons/ContentTypes/example.svg
+  title: LLL:EXT:typo3_yaml_loader/Resources/Private/Language/Backend.ContentTypes.xlf:tt_content.example.title
+  description: LLL:EXT:typo3_yaml_loader/Resources/Private/Language/Backend.ContentTypes.xlf:tt_content.example.description
+  ui:
+    tabs:
+      general:
+        label: LLL:EXT:typo3_yaml_loader/Private/Language/Backend.ContentTypes.xlf:tt_content.example.tabs.general.label
+        palettes:
+          general: []
+          headers: []
+          bodytext:
+            label: LLL:EXT:typo3_yaml_loader/Private/Language/Backend.ContentTypes.xlf:tt_content.example.fields.bodytext.form_label
+            columnsOverrides:
+              enableRichtext: true
+              richtextConfiguration: default

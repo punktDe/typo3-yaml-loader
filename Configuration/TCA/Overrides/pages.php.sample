@@ -1,0 +1,13 @@
+<?php
+declare(strict_types=1);
+
+use PunktDe\Typo3YamlLoader\Loader\DoktypeLoader;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+
+defined('TYPO3') || die('Access Denied');
+
+(function ($extKey='typo3_yaml_loader') {
+    /** @var DoktypeLoader $doktypeLoader */
+    $doktypeLoader = GeneralUtility::makeInstance(DoktypeLoader::class, $extKey);
+    $doktypeLoader->loadTcaOverrides();
+})();

@@ -1,0 +1,14 @@
+<?php
+declare(strict_types=1);
+
+use PunktDe\Typo3YamlLoader\Loader\ContentTypeLoader;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+
+defined('TYPO3') || die('Access Denied');
+
+(function ($extKey='typo3_yaml_loader', $table='tt_content') {
+
+    /** @var ContentTypeLoader $contentTypeLoader */
+    $contentTypeLoader = GeneralUtility::makeInstance(ContentTypeLoader::class, $extKey);
+    $contentTypeLoader->loadTcaOverrides();
+})();
