@@ -113,14 +113,19 @@ class ContentTypeLoader implements SingletonInterface
                     if (empty($paletteConfiguration)) {
                         $showItem[] = '--palette--;;' . $paletteIdentifier;
                     } else {
-                        $showItem[] = $paletteIdentifier . ';' . $paletteConfiguration['label'];
+                        if (array_key_exists($paletteIdentifier, $GLOBALS['TCA']['tt_content']['palettes'])) {
+                            $showItem[] = '--palette--;;' . $paletteIdentifier;
+                        } else {
+                            $showItem[] = $paletteIdentifier . ';' . $paletteConfiguration['label'];
+                        }
 
                         if (
                             array_key_exists('columnsOverrides', $paletteConfiguration)
                             && !empty($paletteConfiguration['columnsOverrides'])
                         ) {
-                            $GLOBALS['TCA']['tt_content']['types'][$identifier]['columnsOverrides'][$paletteIdentifier]['config'] = $paletteConfiguration['columnsOverrides'];
-
+                            foreach($paletteConfiguration['columnsOverrides'] as $column => $override) {
+                                $GLOBALS['TCA']['tt_content']['types'][$identifier]['columnsOverrides'][$column] = $override;
+                            }
                         }
                     }
                 }
