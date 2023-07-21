@@ -123,8 +123,9 @@ class ContentTypeLoader implements SingletonInterface
                             array_key_exists('columnsOverrides', $paletteConfiguration)
                             && !empty($paletteConfiguration['columnsOverrides'])
                         ) {
-                            $GLOBALS['TCA']['tt_content']['types'][$identifier]['columnsOverrides'][$paletteIdentifier]['config'] = $paletteConfiguration['columnsOverrides'];
-
+                            foreach($paletteConfiguration['columnsOverrides'] as $column => $override) {
+                                $GLOBALS['TCA']['tt_content']['types'][$identifier]['columnsOverrides'][$column] = $override;
+                            }
                         }
                     }
                 }
