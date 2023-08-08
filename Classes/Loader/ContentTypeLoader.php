@@ -6,10 +6,13 @@ namespace PunktDe\Typo3YamlLoader\Loader;
 use PunktDe\Typo3YamlLoader\Exception\YamlConfigException;
 use PunktDe\Typo3YamlLoader\Converter\ArrayToTyposcriptConverter;
 use PunktDe\Typo3YamlLoader\Helper\IconRegistryHelper;
+use PunktDe\Typo3YamlLoader\Helper\TcaShowitemHelper;
+use PunktDe\Typo3YamlLoader\Validator\ContentTypeValidator;
 use Symfony\Component\Yaml\Yaml;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use function PHPUnit\Framework\throwException;
 
 class ContentTypeLoader implements SingletonInterface
 {
@@ -21,40 +24,22 @@ class ContentTypeLoader implements SingletonInterface
 
     /**
      * @param string $extensionKey
-     * @param mixed[] $configurations
+     * @param mixed[] $contentTypeConfigurations
      * @throws YamlConfigException
      */
     public function __construct(
         string        $extensionKey,
-        private array $configurations = [],
+        private array $contentTypeConfigurations = [],
     )
     {
+        $validationResults = [];
+
         $extensionPath = GeneralUtility::getFileAbsFileName(sprintf('EXT:%s/Configuration/ContentTypes', $extensionKey));
         $contentTypeFiles = glob($extensionPath . '/*.yaml');
 
         if (!$contentTypeFiles) return;
 
-        foreach ($contentTypeFiles as $file) {
-            if (!is_file($file)) continue;
-
-            $contents = file_get_contents($file);
-            if (!$contents) continue;
-
-            $loadedConfig = YAML::parse($contents);
-            $this->configurations = array_merge($this->configurations, $loadedConfig);
-            foreach ($this->configurations as $identifier => $configuration) {
-                $validationResult = self::validateDoktypeConfig(self::REQUIRED_CONTENT_TYPE_STRUCTURE, $configuration);
-
-                if (!empty($validationResult)) {
-                    $validationResults[$identifier] = $validationResult;
-                    continue;
-                }
-
-                $iconRegistryHelper = GeneralUtility::makeInstance(IconRegistryHelper::class);
-                $iconIdentifier = $iconRegistryHelper->registerIcon($identifier, $configuration['iconIdentifier']);
-                $this->configurations[$identifier]['iconIdentifier'] = $iconIdentifier;
-            }
-        }
+        $this->loadAndValidateConfigurationFiles($contentTypeFiles, GeneralUtility::makeInstance(ContentTypeValidator::class), $this->contentTypeConfigurations, $validationResults);
 
         if (!empty($validationResults)) {
             throw new YamlConfigException(
@@ -63,9 +48,35 @@ class ContentTypeLoader implements SingletonInterface
         }
     }
 
+    /**
+     * @param mixed[] $configFiles
+     * @param ContentTypeValidator $validator
+     * @param mixed[] $configStorage
+     * @param mixed[] $validationResults
+     * @return void
+     */
+    private function loadAndValidateConfigurationFiles(array $configFiles, ContentTypeValidator $validator, array &$configStorage, array &$validationResults): void
+    {
+        foreach ($configFiles as $configFile) {
+            if (!is_file($configFile)) continue;
+
+            $fileContents = file_get_contents($configFile);
+            if (!$fileContents) continue;
+
+            $config = YAML::parse($fileContents);
+            // Validate
+            $validationResult = $validator->validate($config[array_key_first($config)]);
+            if (!empty($validationResult)) {
+                $validationResults[array_key_first($config)] = $validationResult;
+                continue;
+            }
+            $configStorage = array_merge($configStorage, $config);
+        }
+    }
+
     public function loadPageTS(): void
     {
-        foreach ($this->configurations as $identifier => $configuration) {
+        foreach ($this->contentTypeConfigurations as $identifier => $configuration) {
             $elementConfig = [
                 'elements' => [
                     $identifier => [
@@ -90,7 +101,7 @@ class ContentTypeLoader implements SingletonInterface
 
     public function loadTcaOverrides(): void
     {
-        foreach ($this->configurations as $identifier => $configuration) {
+        foreach ($this->contentTypeConfigurations as $identifier => $configuration) {
             ExtensionManagementUtility::addTcaSelectItem(
                 'tt_content',
                 'CType',
@@ -103,58 +114,12 @@ class ContentTypeLoader implements SingletonInterface
                 'after'
             );
 
-            $showItem = [];
+            $tcaShowitemHelper = GeneralUtility::makeInstance(TcaShowitemHelper::class);
 
-            foreach ($configuration['ui']['tabs'] as $tab) {
-                $label = $tab['label'];
+            $showitemConfig = $tcaShowitemHelper->parseShowitemConfig($identifier, $configuration['ui']['tabs']);
 
-                $showItem[] = '--div--;' . $label;
-                foreach ($tab['palettes'] as $paletteIdentifier => $paletteConfiguration) {
-                    if (empty($paletteConfiguration)) {
-                        $showItem[] = '--palette--;;' . $paletteIdentifier;
-                    } else {
-                        if (array_key_exists($paletteIdentifier, $GLOBALS['TCA']['tt_content']['palettes'])) {
-                            $showItem[] = '--palette--;;' . $paletteIdentifier;
-                        } else {
-                            $showItem[] = $paletteIdentifier . ';' . $paletteConfiguration['label'];
-                        }
-
-                        if (
-                            array_key_exists('columnsOverrides', $paletteConfiguration)
-                            && !empty($paletteConfiguration['columnsOverrides'])
-                        ) {
-                            foreach($paletteConfiguration['columnsOverrides'] as $column => $override) {
-                                $GLOBALS['TCA']['tt_content']['types'][$identifier]['columnsOverrides'][$column] = $override;
-                            }
-                        }
-                    }
-                }
-            }
-
-            $GLOBALS['TCA']['tt_content']['types'][$identifier]['showitem'] = implode(",\n", $showItem);
+            $GLOBALS['TCA']['tt_content']['types'][$identifier]['showitem'] = $showitemConfig;
             $GLOBALS['TCA']['tt_content']['ctrl']['typeicon_classes'][$identifier] = $configuration['iconIdentifier'];
         }
-    }
-
-    /**
-     * @param mixed[] $structure
-     * @param mixed[] $data
-     * @return mixed[]
-     */
-    private static function validateDoktypeConfig(array $structure, array $data): array
-    {
-        $missingKeys = [];
-        foreach ($structure as $key => $value) {
-            if (!array_key_exists($key, $data)) {
-                $missingKeys[] = $key;
-            }
-            if (is_array($value)) {
-                $result = self::validateDoktypeConfig($value, $data[$key]);
-                if (!empty($result)) {
-                    $missingKeys[$key] = $result;
-                }
-            }
-        }
-        return $missingKeys;
     }
 }

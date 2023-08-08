@@ -5,7 +5,8 @@
     "homepage": "https://www.punkt.de",
     "version": "1.0.0",
     "require": {
-        "typo3/cms-core": "^12.4"
+        "typo3/cms-core": "^12.4",
+        "symfony/validator": "^6.3"
     },
     "authors": [
         {

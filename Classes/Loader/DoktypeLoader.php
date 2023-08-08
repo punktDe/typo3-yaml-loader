@@ -6,6 +6,9 @@ namespace PunktDe\Typo3YamlLoader\Loader;
 use PunktDe\Typo3YamlLoader\Exception\YamlConfigException;
 use PunktDe\Typo3YamlLoader\Converter\ArrayToTyposcriptConverter;
 use PunktDe\Typo3YamlLoader\Helper\IconRegistryHelper;
+use PunktDe\Typo3YamlLoader\Helper\TcaShowitemHelper;
+use PunktDe\Typo3YamlLoader\Validator\DoktypeValidator;
+use PunktDe\Typo3YamlLoader\Validator\PalletteValidator;
 use Symfony\Component\Yaml\Yaml;
 use TYPO3\CMS\Core\Domain\Repository\PageRepository;
 use TYPO3\CMS\Core\SingletonInterface;
@@ -15,57 +18,39 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 class DoktypeLoader implements SingletonInterface
 {
-    const REQUIRED_DOKTYPE_STRUCTURE = [
-        'icons' => [
-            'default' => NULL,
-            'hidden' => NULL,
-        ],
-        'title' => NULL,
-        'backendLayout' => [
-            'doktype' => NULL,
-            'rowCount' => NULL,
-            'colCount' => NULL,
-        ],
-    ];
-
     /**
      * @param string $extensionKey
-     * @param mixed[] $configurations
+     * @param mixed[] $doktypeConfigurations
+     * @param mixed[] $paletteConfigurations
      * @throws YamlConfigException
      */
     public function __construct(
         string $extensionKey,
-        private array $configurations = [],
+        private array $doktypeConfigurations = [],
+        private array $paletteConfigurations = [],
     )
     {
         $validationResults = [];
 
         $extensionPath = GeneralUtility::getFileAbsFileName(sprintf('EXT:%s/Configuration/Doktypes', $extensionKey));
-        $doktypeFiles = glob($extensionPath . '/*.yaml');
+        $doktypeFiles = glob($extensionPath . '/Pages/*.yaml');
+        $paletteFiles = glob($extensionPath . '/Palettes/*.yaml');
 
-        if (!$doktypeFiles) return;
+        if (!$doktypeFiles && !$paletteFiles) return;
 
-        foreach ($doktypeFiles as $file) {
-            if (!is_file($file)) continue;
+        if (!empty($paletteFiles) && is_array($paletteFiles)) {
+            $this->loadAndValidateConfigurationFiles($paletteFiles, GeneralUtility::makeInstance(PalletteValidator::class), $this->paletteConfigurations, $validationResults);
+        }
+        if (!empty($doktypeFiles) && is_array($doktypeFiles)) {
+            $this->loadAndValidateConfigurationFiles($doktypeFiles, GeneralUtility::makeInstance(DoktypeValidator::class), $this->doktypeConfigurations, $validationResults);
+        }
 
-            $contents = file_get_contents($file);
-            if (!$contents) continue;
-
-            $loadedConfig = YAML::parse($contents);
-            $this->configurations = array_merge($this->configurations, $loadedConfig);
-            foreach ($this->configurations as $identifier => $configuration) {
-                $validationResult = self::validateDoktypeConfig(self::REQUIRED_DOKTYPE_STRUCTURE, $configuration);
-
-                if (!empty($validationResult)) {
-                    $validationResults[$identifier] = $validationResult;
-                    continue;
-                }
-
-                foreach ($configuration['icons'] as $type => $icon) {
-                    $iconRegistryHelper = GeneralUtility::makeInstance(IconRegistryHelper::class);
-                    $iconIdentifier = $iconRegistryHelper->registerIcon($identifier, $icon, $type);
-                    $this->configurations[$identifier]['icons'][$type] = $iconIdentifier;
-                }
+        // Load Icons
+        foreach ($this->doktypeConfigurations as $identifier => $configuration) {
+            foreach ($configuration['icons'] as $type => $icon) {
+                $iconRegistryHelper = GeneralUtility::makeInstance(IconRegistryHelper::class);
+                $iconIdentifier = $iconRegistryHelper->registerIcon($identifier, $icon, $type);
+                $this->doktypeConfigurations[$identifier]['icons'][$type] = $iconIdentifier;
             }
         }
 
@@ -76,9 +61,35 @@ class DoktypeLoader implements SingletonInterface
         }
     }
 
+    /**
+     * @param mixed[] $configFiles
+     * @param PalletteValidator|DoktypeValidator $validator
+     * @param mixed[] $configStorage
+     * @param mixed[] $validationResults
+     * @return void
+     */
+    private function loadAndValidateConfigurationFiles(array $configFiles, PalletteValidator|DoktypeValidator $validator, array &$configStorage, array &$validationResults): void
+    {
+        foreach ($configFiles as $configFile) {
+            if (!is_file($configFile)) continue;
+
+            $fileContents = file_get_contents($configFile);
+            if (!$fileContents) continue;
+
+            $config = YAML::parse($fileContents);
+            // Validate
+            $validationResult = $validator->validate($config[array_key_first($config)]);
+            if (!empty($validationResult)) {
+                $validationResults[array_key_first($config)] = $validationResult;
+                continue;
+            }
+            $configStorage = array_merge($configStorage, $config);
+        }
+    }
+
     public function loadPageTS(): void
     {
-        foreach ($this->configurations as $identifier => $configuration) {
+        foreach ($this->doktypeConfigurations as $identifier => $configuration) {
             $doktype = $configuration['backendLayout']['doktype'];
 
             $configForPageTS = [
@@ -99,7 +110,7 @@ class DoktypeLoader implements SingletonInterface
 
     public function loadPageTypes(): void
     {
-        foreach ($this->configurations as $identifier => $configuration) {
+        foreach ($this->doktypeConfigurations as $identifier => $configuration) {
 
             $doktype = $configuration['backendLayout']['doktype'];
 
@@ -112,7 +123,31 @@ class DoktypeLoader implements SingletonInterface
 
     public function loadTcaOverrides(): void
     {
-        foreach ($this->configurations as $identifier => $configuration) {
+
+        foreach ($this->paletteConfigurations as $identifier => $configuration) {
+            $columnConfig = [];
+            $paletteConfiguration = [
+                'label' => $configuration['label'],
+                'showitem' => ''
+            ];
+
+            foreach ($configuration['columns'] as $columnIdentifier => $columnConfiguration) {
+                if (is_array($columnConfiguration) && !empty($columnConfiguration)) {
+                    $columnConfig[$columnIdentifier] = [
+                        'exclude' => $columnConfiguration['exclude'] ?? false,
+                        'label' => $columnConfiguration['label'],
+                        'config' => $columnConfiguration['config']
+                    ];
+
+                }
+                $paletteConfiguration['showitem'] .= $columnIdentifier . ';,';
+            }
+
+            ExtensionManagementUtility::addTCAcolumns('pages', $columnConfig);
+            $GLOBALS['TCA']['pages']['palettes'][$identifier] = $paletteConfiguration;
+        }
+
+        foreach ($this->doktypeConfigurations as $identifier => $configuration) {
             $title = $configuration['title'];
             $doktype = $configuration['backendLayout']['doktype'];
 
@@ -122,6 +157,21 @@ class DoktypeLoader implements SingletonInterface
             ExtensionManagementUtility::addTcaSelectItem(
                 'pages','doktype', [$title, $doktype, $iconIdentifierDefault], '1', 'before'
             );
+
+            $showItem = $GLOBALS['TCA']['pages']['types'][PageRepository::DOKTYPE_DEFAULT]['showitem'];
+            $tcaShowitemHelper = GeneralUtility::makeInstance(TcaShowitemHelper::class);
+
+
+            if (array_key_exists('ui', $configuration)) {
+                $keepExisting = array_key_exists('keepExisting', $configuration['ui']) ? $configuration['ui']['keepExisting'] : true;
+
+                $showitemConfiguration = $tcaShowitemHelper->parseShowitemConfig($identifier, $configuration['ui']['tabs']);
+
+                if ($keepExisting) {
+                     $showItem = $GLOBALS['TCA']['pages']['types'][PageRepository::DOKTYPE_DEFAULT]['showitem'] . ', ' . $showitemConfiguration;
+                }
+            }
+
 
             ArrayUtility::mergeRecursiveWithOverrule(
                 $GLOBALS['TCA']['pages'],
@@ -135,33 +185,11 @@ class DoktypeLoader implements SingletonInterface
                     ],
                     'types' => [
                         $doktype => [
-                            'showitem' => $GLOBALS['TCA']['pages']['types'][PageRepository::DOKTYPE_DEFAULT]['showitem']
+                            'showitem' => $showItem
                         ]
                     ]
                 ],
             );
         }
-    }
-
-    /**
-     * @param mixed[] $structure
-     * @param mixed[] $data
-     * @return mixed[]
-     */
-    private static function validateDoktypeConfig(array $structure, array $data): array
-    {
-        $missingKeys = [];
-        foreach ($structure as $key => $value) {
-            if (!array_key_exists($key, $data)) {
-                $missingKeys[] = $key;
-            }
-            if (is_array($value)) {
-                $result = self::validateDoktypeConfig($value, $data[$key]);
-                if (!empty($result)) {
-                    $missingKeys[$key] = $result;
-                }
-            }
-        }
-        return $missingKeys;
     }
 }
