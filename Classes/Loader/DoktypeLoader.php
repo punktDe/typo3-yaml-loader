@@ -8,7 +8,7 @@ use PunktDe\Typo3YamlLoader\Converter\ArrayToTyposcriptConverter;
 use PunktDe\Typo3YamlLoader\Helper\IconRegistryHelper;
 use PunktDe\Typo3YamlLoader\Helper\TcaShowitemHelper;
 use PunktDe\Typo3YamlLoader\Validator\DoktypeValidator;
-use PunktDe\Typo3YamlLoader\Validator\PalletteValidator;
+use PunktDe\Typo3YamlLoader\Validator\PaletteValidator;
 use Symfony\Component\Yaml\Yaml;
 use TYPO3\CMS\Core\Domain\Repository\PageRepository;
 use TYPO3\CMS\Core\SingletonInterface;
@@ -18,6 +18,8 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 class DoktypeLoader implements SingletonInterface
 {
+    protected TcaShowitemHelper $tcaShowitemHelper;
+
     /**
      * @param string $extensionKey
      * @param mixed[] $doktypeConfigurations
@@ -32,6 +34,8 @@ class DoktypeLoader implements SingletonInterface
     {
         $validationResults = [];
 
+        $this->tcaShowitemHelper = GeneralUtility::makeInstance(TcaShowitemHelper::class);
+
         $extensionPath = GeneralUtility::getFileAbsFileName(sprintf('EXT:%s/Configuration/Doktypes', $extensionKey));
         $doktypeFiles = glob($extensionPath . '/Pages/*.yaml');
         $paletteFiles = glob($extensionPath . '/Palettes/*.yaml');
@@ -39,7 +43,7 @@ class DoktypeLoader implements SingletonInterface
         if (!$doktypeFiles && !$paletteFiles) return;
 
         if (!empty($paletteFiles) && is_array($paletteFiles)) {
-            $this->loadAndValidateConfigurationFiles($paletteFiles, GeneralUtility::makeInstance(PalletteValidator::class), $this->paletteConfigurations, $validationResults);
+            $this->loadAndValidateConfigurationFiles($paletteFiles, GeneralUtility::makeInstance(PaletteValidator::class), $this->paletteConfigurations, $validationResults);
         }
         if (!empty($doktypeFiles) && is_array($doktypeFiles)) {
             $this->loadAndValidateConfigurationFiles($doktypeFiles, GeneralUtility::makeInstance(DoktypeValidator::class), $this->doktypeConfigurations, $validationResults);
@@ -63,12 +67,12 @@ class DoktypeLoader implements SingletonInterface
 
     /**
      * @param mixed[] $configFiles
-     * @param PalletteValidator|DoktypeValidator $validator
+     * @param PaletteValidator|DoktypeValidator $validator
      * @param mixed[] $configStorage
      * @param mixed[] $validationResults
      * @return void
      */
-    private function loadAndValidateConfigurationFiles(array $configFiles, PalletteValidator|DoktypeValidator $validator, array &$configStorage, array &$validationResults): void
+    private function loadAndValidateConfigurationFiles(array $configFiles, PaletteValidator|DoktypeValidator $validator, array &$configStorage, array &$validationResults): void
     {
         foreach ($configFiles as $configFile) {
             if (!is_file($configFile)) continue;
@@ -123,27 +127,31 @@ class DoktypeLoader implements SingletonInterface
 
     public function loadTcaOverrides(): void
     {
-
         foreach ($this->paletteConfigurations as $identifier => $configuration) {
-            $columnConfig = [];
-            $paletteConfiguration = [
-                'label' => $configuration['label'],
-                'showitem' => ''
-            ];
+            // Add columns to TCA/pages/columns
+            $columns = [];
 
-            foreach ($configuration['columns'] as $columnIdentifier => $columnConfiguration) {
-                if (is_array($columnConfiguration) && !empty($columnConfiguration)) {
-                    $columnConfig[$columnIdentifier] = [
-                        'exclude' => $columnConfiguration['exclude'] ?? false,
-                        'label' => $columnConfiguration['label'],
-                        'config' => $columnConfiguration['config']
-                    ];
+            foreach($configuration['columns'] as $columnIdentifier => $columnConfiguration) {
+                $columns[$columnIdentifier] = [
+                    'exclude' => $columnConfiguration['exclude'] ?? 0,
+                    'label' => $columnConfiguration['label'],
+                ];
 
+                if (array_key_exists('config', $columnConfiguration)) {
+                    $columns[$columnIdentifier]['config'] = $columnConfiguration['config'];
                 }
-                $paletteConfiguration['showitem'] .= $columnIdentifier . ';,';
             }
 
-            ExtensionManagementUtility::addTCAcolumns('pages', $columnConfig);
+            ArrayUtility::mergeRecursiveWithOverrule(
+                $GLOBALS['TCA']['pages']['columns'], $columns
+            );
+
+            // Add palettes to TCA/pages/palettes
+            $paletteConfiguration = [
+                'label' => $configuration['label'],
+                'showitem' => implode(',--linebreak--,', array_map(function ($el) { return $el . ';';}, array_keys($columns)))
+            ];
+
             $GLOBALS['TCA']['pages']['palettes'][$identifier] = $paletteConfiguration;
         }
 
@@ -158,14 +166,13 @@ class DoktypeLoader implements SingletonInterface
                 'pages','doktype', [$title, $doktype, $iconIdentifierDefault], '1', 'before'
             );
 
-            $showItem = $GLOBALS['TCA']['pages']['types'][PageRepository::DOKTYPE_DEFAULT]['showitem'];
-            $tcaShowitemHelper = GeneralUtility::makeInstance(TcaShowitemHelper::class);
+            $showItem = '';
 
 
             if (array_key_exists('ui', $configuration)) {
                 $keepExisting = array_key_exists('keepExisting', $configuration['ui']) ? $configuration['ui']['keepExisting'] : true;
 
-                $showitemConfiguration = $tcaShowitemHelper->parseShowitemConfig($identifier, $configuration['ui']['tabs']);
+                $showitemConfiguration = $this->tcaShowitemHelper->parseShowitemConfig($identifier, $configuration['ui']['tabs']);
 
                 if ($keepExisting) {
                      $showItem = $GLOBALS['TCA']['pages']['types'][PageRepository::DOKTYPE_DEFAULT]['showitem'] . ', ' . $showitemConfiguration;

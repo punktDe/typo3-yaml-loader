@@ -8,38 +8,45 @@ use PunktDe\Typo3YamlLoader\Converter\ArrayToTyposcriptConverter;
 use PunktDe\Typo3YamlLoader\Helper\IconRegistryHelper;
 use PunktDe\Typo3YamlLoader\Helper\TcaShowitemHelper;
 use PunktDe\Typo3YamlLoader\Validator\ContentTypeValidator;
+use PunktDe\Typo3YamlLoader\Validator\PaletteValidator;
 use Symfony\Component\Yaml\Yaml;
 use TYPO3\CMS\Core\SingletonInterface;
+use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use function PHPUnit\Framework\throwException;
 
 class ContentTypeLoader implements SingletonInterface
 {
-    const REQUIRED_CONTENT_TYPE_STRUCTURE = [
-        'iconIdentifier' => null,
-        'title' => null,
-        'description' => null,
-    ];
+    protected TcaShowitemHelper $tcaShowitemHelper;
 
     /**
      * @param string $extensionKey
      * @param mixed[] $contentTypeConfigurations
+     * @param mixed[] $paletteConfigurations
      * @throws YamlConfigException
      */
     public function __construct(
-        string        $extensionKey,
+        private readonly string $extensionKey,
         private array $contentTypeConfigurations = [],
+        private array $paletteConfigurations = [],
     )
     {
         $validationResults = [];
 
+        $this->tcaShowitemHelper = GeneralUtility::makeInstance(TcaShowitemHelper::class);
+
         $extensionPath = GeneralUtility::getFileAbsFileName(sprintf('EXT:%s/Configuration/ContentTypes', $extensionKey));
-        $contentTypeFiles = glob($extensionPath . '/*.yaml');
+        $contentTypeFiles = glob($extensionPath . '/Elements/*.yaml');
+        $paletteFiles = glob($extensionPath . '/Palettes/*.yaml');
 
-        if (!$contentTypeFiles) return;
-
-        $this->loadAndValidateConfigurationFiles($contentTypeFiles, GeneralUtility::makeInstance(ContentTypeValidator::class), $this->contentTypeConfigurations, $validationResults);
+        if (!$contentTypeFiles && !$paletteFiles) return;
+        if (!empty($paletteFiles) && is_array($paletteFiles)) {
+            $this->loadAndValidateConfigurationFiles($paletteFiles, GeneralUtility::makeInstance(PaletteValidator::class), $this->paletteConfigurations, $validationResults);
+        }
+        if (!empty($contentTypeFiles) && is_array($contentTypeFiles)) {
+            $this->loadAndValidateConfigurationFiles($contentTypeFiles, GeneralUtility::makeInstance(ContentTypeValidator::class), $this->contentTypeConfigurations, $validationResults);
+        }
 
         if (!empty($validationResults)) {
             throw new YamlConfigException(
@@ -55,7 +62,7 @@ class ContentTypeLoader implements SingletonInterface
      * @param mixed[] $validationResults
      * @return void
      */
-    private function loadAndValidateConfigurationFiles(array $configFiles, ContentTypeValidator $validator, array &$configStorage, array &$validationResults): void
+    private function loadAndValidateConfigurationFiles(array $configFiles, PaletteValidator|ContentTypeValidator $validator, array &$configStorage, array &$validationResults): void
     {
         foreach ($configFiles as $configFile) {
             if (!is_file($configFile)) continue;
@@ -101,6 +108,33 @@ class ContentTypeLoader implements SingletonInterface
 
     public function loadTcaOverrides(): void
     {
+        foreach ($this->paletteConfigurations as $identifier => $configuration) {
+            $columns = [];
+
+            foreach($configuration['columns'] as $columnIdentifier => $columnConfiguration) {
+                $columns[$columnIdentifier] = [
+                    'exclude' => $columnConfiguration['exclude'] ?? 0,
+                    'label' => $columnConfiguration['label'],
+                ];
+
+                if (array_key_exists('config', $columnConfiguration)) {
+                    $columns[$columnIdentifier]['config'] = $columnConfiguration['config'];
+                }
+            }
+
+            ArrayUtility::mergeRecursiveWithOverrule(
+                $GLOBALS['TCA']['tt_content']['columns'], $columns
+            );
+
+            // Add palettes to TCA/tt_content/palettes
+            $paletteConfiguration = [
+                'label' => $configuration['label'],
+                'showitem' => implode(',--linebreak--,', array_map(function ($el) { return $el . ';';}, array_keys($columns)))
+            ];
+
+            $GLOBALS['TCA']['tt_content']['palettes'][$identifier] = $paletteConfiguration;
+        }
+
         foreach ($this->contentTypeConfigurations as $identifier => $configuration) {
             ExtensionManagementUtility::addTcaSelectItem(
                 'tt_content',
@@ -114,12 +148,27 @@ class ContentTypeLoader implements SingletonInterface
                 'after'
             );
 
-            $tcaShowitemHelper = GeneralUtility::makeInstance(TcaShowitemHelper::class);
+            $showitem = '';
 
-            $showitemConfig = $tcaShowitemHelper->parseShowitemConfig($identifier, $configuration['ui']['tabs']);
+            if (array_key_exists('ui', $configuration)) {
+                $showitem = $this->tcaShowitemHelper->parseShowitemConfig($identifier, $configuration['ui']['tabs']);
+            }
 
-            $GLOBALS['TCA']['tt_content']['types'][$identifier]['showitem'] = $showitemConfig;
-            $GLOBALS['TCA']['tt_content']['ctrl']['typeicon_classes'][$identifier] = $configuration['iconIdentifier'];
+            ArrayUtility::mergeRecursiveWithOverrule(
+                $GLOBALS['TCA']['tt_content'],
+                [
+                    'ctrl' => [
+                        'typeicon_classes' => [
+                            $identifier => $configuration['iconIdentifier']
+                        ]
+                    ],
+                    'types' => [
+                        $identifier => [
+                            'showitem' => $showitem
+                        ]
+                    ]
+                ]
+            );
         }
     }
 }
