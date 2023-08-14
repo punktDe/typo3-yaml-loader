@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+    <file source-language="en" datatype="plaintext" original="EXT:typo3_yaml_loader/Resources/Private/Language/Backend.xlf" product-name="typo3_yaml_loader">
+        <header/>
+        <body>
+            <!-- Example Content -->
+            <trans-unit id="palettes.example.label">
+                <source>Example Palette</source>
+            </trans-unit
+            <trans-unit id="palettes.example.fields.header.form_label">
+                <source>Example Element</source>
+            </trans-unit>
+            <trans-unit id="palettes.example.fields.header_layout.form_label">
+                <source>Example Element</source>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>

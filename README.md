@@ -4,7 +4,6 @@ This package was created as a proof-of-concept for content-type and doktype conf
 ## Install
 Install this package
 > composer req punktde/typo3-yaml-loader
-> 
  
 ## Include configuration
 Add the following lines to your `ext_tables.php`:
@@ -43,80 +42,16 @@ Add the following lines to your `Configuration/TCA/Overrides/tt_content.php`:
 > Backend Layouts will be named as `pagets__{YOUR_IDENTIFIER}` by TYPO3. You can use this identifier to render the appropriate template. 
  
 
-## Add Page Type
+## Add a Content or Page Type
 
 ### Create YAML Config
+YAML configuration files are located at `Configuration/(ContentTypes|Doktyps)/(Elements|Palettes)`
 
-YAML configuration files are located at `Configuration/Doktypes`
-
-The configuration _must_ contain the following keys:
-```
-default_page:
-  icons: 
-    default: string (EXT:FILE...) 
-    hidden: string (EXT:FILE...)
-  title: string (LLL:EXT:...)
-  backendLayout:
-    doktype: int
-    rowCount: int
-    colCount: int
-    
-    // If you want to configure the backend-layout add a configuration:
-    rows:
-      1:
-        columns:
-          1:
-            name: string (LLL:EXT...)
-            colPos: int
-            
-            // Optional: restrict available content-element types for this column:
-            allowed/disallowed:
-              CType: text,textmedia (etc.)
-            maxItems: int
-```
-
-### Create Template
-
-Page-templates are located at `Resources/Private/Templates/Page`
-
-Template paths are derived from the page-type-identifier as defined top-level in the YAML configuration *(UpperCamelCase)*.
-> Note: default_page renders Resources/Private/Templates/Page/DefaultPage.html
-
-Make sure to include the Default-Layout by adding `<f:layout name="Default" />` to your template. Your content will be rendered from within the section Main.
-
-Example:
-```
-<f:layout name="Default" />
-
-<f:section name="Main">
-    <!-- Your content here -->
-</f:section>
-```
-
-## Add a content type
-
-### Create YAML Config
-YAML configuration files are located at `Configuration/ContentTypes`
-
-The configuration _must_ contain the following keys:
+The yaml config will be validated on load, you can find the validation-rules in the following class:
 
 ```
-example:
-  iconIdentifier: content-text
-  title: LLL:EXT:your_site_extension_key/Resources/Private/Language/Backend.Content.xlf:tt_content.example.title
-  description: LLL:EXT:your_site_extension_key/Resources/Private/Language/Backend.Content.xlf:tt_content.example.description
+  Classes/Validator/*Validator.php
 ```
-### Create Template
-Content-templates are located at `Resources/Private/Templates/Content`
-
-Make sure to include the Default-Layout by adding `<f:layout name="Default(WithHeader)" />` to your template. Your content will be rendered from within the section Main.
-
-### Rendering Components
-Components can be created by utilizing the methods provided by sitegeist/fluid-components.
-
-Documentation can be found here:
-
-> https://github.com/sitegeist/fluid-components/blob/3.6.0/Documentation/DataStructures.md
 
 # Acknowledgments
 

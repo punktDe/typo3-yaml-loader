@@ -1,0 +1,7 @@
+example:
+  label: LLL:EXT:typo3_yaml_loader/Resources/Private/Language/Backend.ContentTypes.Palettes.xlf:palettes.example.label
+  columns:
+    header:
+      label: LLL:EXT:typo3_yaml_loader/Resources/Private/Language/Backend.ContentTypes.Palettes.xlf:palettes.example.fields.header.form_label
+    header_layout:
+      label: LLL:EXT:typo3_yaml_loader/Resources/Private/Language/Backend.ContentTypes.Palettes.xlf:palettes.example.fields.header_layout.form_label
