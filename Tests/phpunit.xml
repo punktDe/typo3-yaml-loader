@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<phpunit>
+	<testsuites>
+		<testsuite name="main">
+			<directory>./Unit/*</directory>
+      <directory>./Functional/*</directory>
+		</testsuite>
+	</testsuites>
+	<logging/>
+</phpunit>
