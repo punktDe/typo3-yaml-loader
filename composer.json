@@ -4,6 +4,7 @@
     "description": "Load content types and doktypes from yaml",
     "homepage": "https://www.punkt.de",
     "version": "1.0.0",
+    "license": "MIT",
     "require": {
         "typo3/cms-core": "^12.4",
         "symfony/validator": "^6.3"
