@@ -166,7 +166,7 @@ class DoktypeLoader implements SingletonInterface
                 'pages','doktype', [$title, $doktype, $iconIdentifierDefault], '1', 'before'
             );
 
-            $showItem = '';
+            $showItem = $GLOBALS['TCA']['pages']['types'][PageRepository::DOKTYPE_DEFAULT]['showitem'];
 
 
             if (array_key_exists('ui', $configuration)) {
@@ -175,7 +175,9 @@ class DoktypeLoader implements SingletonInterface
                 $showitemConfiguration = $this->tcaShowitemHelper->parseShowitemConfig($identifier, $configuration['ui']['tabs']);
 
                 if ($keepExisting) {
-                     $showItem = $GLOBALS['TCA']['pages']['types'][PageRepository::DOKTYPE_DEFAULT]['showitem'] . ', ' . $showitemConfiguration;
+                     $showItem .=  ',' . $showitemConfiguration;
+                } else {
+                    $showItem = $showitemConfiguration;
                 }
             }
 
