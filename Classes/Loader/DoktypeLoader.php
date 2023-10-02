@@ -10,6 +10,7 @@ use PunktDe\Typo3YamlLoader\Helper\TcaShowitemHelper;
 use PunktDe\Typo3YamlLoader\Validator\DoktypeValidator;
 use PunktDe\Typo3YamlLoader\Validator\PaletteValidator;
 use Symfony\Component\Yaml\Yaml;
+use TYPO3\CMS\Core\DataHandling\PageDoktypeRegistry;
 use TYPO3\CMS\Core\Domain\Repository\PageRepository;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
@@ -117,11 +118,15 @@ class DoktypeLoader implements SingletonInterface
         foreach ($this->doktypeConfigurations as $identifier => $configuration) {
 
             $doktype = $configuration['backendLayout']['doktype'];
-
-            $GLOBALS['PAGES_TYPES'][$doktype] = [
+            $configuration = [
                 'type' => 'web',
                 'allowedTables' => '*',
             ];
+
+            // TODO: not sure if this is still used in TYPO3 12
+            $GLOBALS['PAGES_TYPES'][$doktype] = $configuration;
+
+            GeneralUtility::makeInstance(PageDoktypeRegistry::class)->add($doktype, $configuration);
         }
     }
 
